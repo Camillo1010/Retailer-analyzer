@@ -201,7 +201,7 @@ export default async function PropertyPage({
               <RankedBar
                 data={rankedData}
                 median={overallPeerMedianPsf}
-                valueFormat={(v) => `$${v.toLocaleString()}`}
+                valueFormat="currency"
               />
             </CardContent>
           </Card>

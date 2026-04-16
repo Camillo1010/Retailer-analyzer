@@ -18,20 +18,26 @@ export interface RankedBarDatum {
   highlight?: boolean;
 }
 
+export type RankedBarFormat = "currency" | "percent" | "number";
+
+function format(v: number, mode: RankedBarFormat): string {
+  switch (mode) {
+    case "currency": return `$${v.toLocaleString()}`;
+    case "percent": return `${v.toFixed(1)}%`;
+    default: return v.toLocaleString();
+  }
+}
+
 export function RankedBar({
   data,
   median,
   height = 320,
-  valuePrefix = "",
-  valueSuffix = "",
-  valueFormat,
+  valueFormat = "currency",
 }: {
   data: RankedBarDatum[];
   median?: number | null;
   height?: number;
-  valuePrefix?: string;
-  valueSuffix?: string;
-  valueFormat?: (n: number) => string;
+  valueFormat?: RankedBarFormat;
 }) {
   const sorted = [...data].sort((a, b) => b.value - a.value);
   return (
@@ -42,7 +48,7 @@ export function RankedBar({
           <XAxis
             type="number"
             stroke={chartTheme.colors.axis}
-            tickFormatter={valueFormat ?? ((v) => `${valuePrefix}${v.toLocaleString()}${valueSuffix}`)}
+            tickFormatter={(v: number) => format(v, valueFormat)}
             tick={{ fontSize: chartTheme.font.size }}
           />
           <YAxis
@@ -55,15 +61,20 @@ export function RankedBar({
           <Tooltip
             cursor={{ fill: "hsl(var(--muted))" }}
             contentStyle={{ fontSize: 12, borderRadius: 6 }}
-            formatter={(v: number) => [
-              valueFormat ? valueFormat(v) : `${valuePrefix}${v.toLocaleString()}${valueSuffix}`,
-              "value",
-            ]}
+            formatter={(v: number) => [format(v, valueFormat), "value"]}
           />
           {median !== undefined && median !== null ? (
-            <ReferenceLine x={median} stroke={chartTheme.colors.median} strokeDasharray="4 3" label={{
-              value: "peer median", fill: chartTheme.colors.median, fontSize: 10, position: "insideTopRight",
-            }} />
+            <ReferenceLine
+              x={median}
+              stroke={chartTheme.colors.median}
+              strokeDasharray="4 3"
+              label={{
+                value: "peer median",
+                fill: chartTheme.colors.median,
+                fontSize: 10,
+                position: "insideTopRight",
+              }}
+            />
           ) : null}
           <Bar dataKey="value" radius={[0, 3, 3, 0]}>
             {sorted.map((d, i) => (

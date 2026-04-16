@@ -18,6 +18,7 @@ import {
   LogicalField,
   LogicalTable,
   matchSheet,
+  SheetMatch,
 } from "./sheet-mapping";
 import { toBool, toNumber, toPercent, toText } from "./validate";
 
@@ -37,12 +38,16 @@ export function normalizeWorkbook(input: NormalizeInput): Workbook {
   const sheetReports: MappingReport["sheets"] = [];
 
   // 1) classify sheets
-  const classified: Array<{ sheet: RawSheet; table: LogicalTable | null; header: HeaderMap }> =
-    input.sheets.map((s) => ({
-      sheet: s,
-      table: matchSheet(s.name),
-      header: buildHeaderMap(s.headers),
-    }));
+  const classified: Array<{ sheet: RawSheet; table: LogicalTable | null; ignore: boolean; header: HeaderMap }> =
+    input.sheets.map((s) => {
+      const m: SheetMatch = matchSheet(s.name);
+      return {
+        sheet: s,
+        table: m.table,
+        ignore: m.ignore,
+        header: buildHeaderMap(s.headers),
+      };
+    });
 
   // 2) ingest list sheets first so we seed canonical ids
   for (const c of classified) {
@@ -74,9 +79,11 @@ export function normalizeWorkbook(input: NormalizeInput): Workbook {
     }
   }
 
-  // 4) any unclassified sheet whose headers look like observations -> ingest as a fallback
+  // 4) any unclassified, non-ignored sheet whose headers look like observations
+  //    or categoryMetrics gets ingested via a structural fallback
   for (const c of classified) {
     if (c.table !== null) continue;
+    if (c.ignore) continue;
     const looksLikeObservations =
       c.header.byField.property !== undefined &&
       c.header.byField.tenant !== undefined;
@@ -97,6 +104,45 @@ export function normalizeWorkbook(input: NormalizeInput): Workbook {
       );
       c.table = "categoryMetrics";
     }
+  }
+
+  // 4b) derive category metrics from observations for any (property, category)
+  //     pair that isn't already covered by an explicit metric. This keeps the
+  //     category pages functional even when the workbook ships only a
+  //     tenant-level data sheet.
+  const haveMetric = new Set(
+    categoryMetrics.map((m) => `${m.propertyId}|${m.categoryId}`),
+  );
+  type Acc = { sales: number; sqft: number; occWeightedSum: number; occWeightSum: number; source: SourceRef };
+  const acc = new Map<string, Acc>();
+  for (const o of observations) {
+    if (!o.categoryId) continue;
+    const key = `${o.propertyId}|${o.categoryId}`;
+    if (haveMetric.has(key)) continue;
+    if (!acc.has(key)) {
+      acc.set(key, { sales: 0, sqft: 0, occWeightedSum: 0, occWeightSum: 0, source: o.source });
+    }
+    const a = acc.get(key)!;
+    if (typeof o.sales === "number") a.sales += o.sales;
+    if (typeof o.sqft === "number") a.sqft += o.sqft;
+    if (typeof o.occCostPct === "number" && typeof o.sqft === "number") {
+      a.occWeightedSum += o.occCostPct * o.sqft;
+      a.occWeightSum += o.sqft;
+    }
+  }
+  for (const [key, a] of acc.entries()) {
+    const [propertyId, categoryId] = key.split("|");
+    const salesPsf = a.sqft > 0 ? a.sales / a.sqft : undefined;
+    const occCostPct = a.occWeightSum > 0 ? a.occWeightedSum / a.occWeightSum : undefined;
+    categoryMetrics.push({
+      propertyId,
+      categoryId,
+      salesPsf,
+      occCostPct,
+      sales: a.sales || undefined,
+      sqft: a.sqft || undefined,
+      source: { ...a.source, sheet: `${a.source.sheet} (derived)` },
+    });
   }
 
   // 5) build the mapping report

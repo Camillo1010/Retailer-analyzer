@@ -5,7 +5,14 @@
  */
 
 function normalize(s: string): string {
-  return (s ?? "").toString().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // preserve a % sign as the token "pct" so e.g. "Occ Cost %" becomes
+  // "occ cost pct" and can be distinguished from a dollar column.
+  return (s ?? "")
+    .toString()
+    .toLowerCase()
+    .replace(/%/g, " pct ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export type LogicalTable =
@@ -18,42 +25,68 @@ export type LogicalTable =
 
 const SHEET_SYNONYMS: Array<{ table: LogicalTable; patterns: string[] }> = [
   { table: "observations", patterns: [
-    "tenant sales", "sales by tenant", "tenant by property", "tenant sales comparison",
-    "tenant performance", "store sales", "tenant data",
+    "tenant data", "tenant sales", "sales by tenant", "tenant by property",
+    "tenant sales comparison", "tenant performance", "store sales",
   ] },
   { table: "categoryMetrics", patterns: [
-    "property category", "category summary", "category by property", "property summary",
-    "category metrics", "category data",
+    "property category", "category by property", "category metrics",
+    "category data",
+  ] },
+  { table: "properties", patterns: [
+    "property list", "property summary", "properties", "list of properties",
+    "centers", "shopping centers",
   ] },
   { table: "categories", patterns: [
-    "category list", "categories", "list of categories", "category", "cat list",
+    "category list", "list of categories", "cat list", "catlist",
   ] },
   { table: "tenants", patterns: [
     "tenant list", "tenants", "list of tenants", "retailers", "store list",
-  ] },
-  { table: "properties", patterns: [
-    "property list", "properties", "list of properties", "centers", "shopping centers",
+    "tenantlist",
   ] },
   { table: "subjectRanking", patterns: [
     "ranking", "ranking summary", "clackamas ranking", "subject ranking", "rank summary",
   ] },
 ];
 
-export function matchSheet(sheetName: string): LogicalTable | null {
+/**
+ * Sheets we deliberately skip: they're human-facing summary views or wide
+ * pivots that duplicate data already ingested from other sheets.
+ */
+const IGNORE_PATTERNS = [
+  "analysis summary",
+  "tenant lookup",
+  "category lookup",
+  "cross comparison",
+  "category matrix",
+  "categorycalc",     // wide-form pre-computed summary; we derive from observations instead
+  "_tenantlist",      // single-column helper; Tenant Data sheet already seeds tenants
+  "_catlist",         // single-column helper; Tenant Data sheet already seeds categories
+];
+
+export interface SheetMatch {
+  table: LogicalTable | null;
+  /** true => do not attempt structural-fallback ingestion on this sheet. */
+  ignore: boolean;
+}
+
+export function matchSheet(sheetName: string): SheetMatch {
   const n = normalize(sheetName);
-  if (!n) return null;
-  // Prefer the synonym with the longest matching pattern
+  if (!n) return { table: null, ignore: true };
+  for (const p of IGNORE_PATTERNS) {
+    if (n.includes(normalize(p))) return { table: null, ignore: true };
+  }
   let best: { table: LogicalTable; score: number } | null = null;
   for (const entry of SHEET_SYNONYMS) {
     for (const p of entry.patterns) {
       const np = normalize(p);
+      if (!np) continue;
       if (n.includes(np)) {
         const score = np.length;
         if (!best || score > best.score) best = { table: entry.table, score };
       }
     }
   }
-  return best?.table ?? null;
+  return { table: best?.table ?? null, ignore: false };
 }
 
 /** Logical field names for header matching. */

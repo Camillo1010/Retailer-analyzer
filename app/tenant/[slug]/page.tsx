@@ -121,7 +121,7 @@ export default async function TenantPage({
             <RankedBar
               data={rankedData}
               median={chainMedian ?? undefined}
-              valueFormat={(v) => `$${v.toLocaleString()}`}
+              valueFormat="currency"
             />
           </CardContent>
         </Card>
@@ -137,8 +137,8 @@ export default async function TenantPage({
                 data={scatterData}
                 xLabel="sales PSF"
                 yLabel="occupancy %"
-                xFormat={(n) => `$${n.toFixed(0)}`}
-                yFormat={(n) => `${n.toFixed(1)}%`}
+                xFormat="currency"
+                yFormat="percent"
               />
             ) : (
               <div className="text-sm text-muted-foreground py-4">Not enough locations with both sales PSF and occupancy cost to plot.</div>

@@ -20,20 +20,30 @@ export interface ScatterDatum {
   highlight?: boolean;
 }
 
+export type ScatterFormat = "currency" | "percent" | "number";
+
+function format(v: number, mode: ScatterFormat): string {
+  switch (mode) {
+    case "currency": return `$${v.toFixed(0)}`;
+    case "percent": return `${v.toFixed(1)}%`;
+    default: return v.toLocaleString();
+  }
+}
+
 export function ScatterPlot({
   data,
   xLabel,
   yLabel,
   height = 320,
-  xFormat,
-  yFormat,
+  xFormat = "number",
+  yFormat = "number",
 }: {
   data: ScatterDatum[];
   xLabel: string;
   yLabel: string;
   height?: number;
-  xFormat?: (n: number) => string;
-  yFormat?: (n: number) => string;
+  xFormat?: ScatterFormat;
+  yFormat?: ScatterFormat;
 }) {
   return (
     <div style={{ width: "100%", height }}>
@@ -45,7 +55,7 @@ export function ScatterPlot({
             dataKey="x"
             stroke={chartTheme.colors.axis}
             tick={{ fontSize: chartTheme.font.size }}
-            tickFormatter={xFormat}
+            tickFormatter={(v: number) => format(v, xFormat)}
           >
             <Label value={xLabel} offset={-10} position="insideBottom" fontSize={11} />
           </XAxis>
@@ -54,7 +64,7 @@ export function ScatterPlot({
             dataKey="y"
             stroke={chartTheme.colors.axis}
             tick={{ fontSize: chartTheme.font.size }}
-            tickFormatter={yFormat}
+            tickFormatter={(v: number) => format(v, yFormat)}
           >
             <Label value={yLabel} angle={-90} position="insideLeft" fontSize={11} />
           </YAxis>
@@ -63,8 +73,8 @@ export function ScatterPlot({
             cursor={{ strokeDasharray: "3 3" }}
             contentStyle={{ fontSize: 12, borderRadius: 6 }}
             formatter={(v: number, name: string) => {
-              const f = name === "x" ? xFormat : name === "y" ? yFormat : undefined;
-              return [f ? f(v) : v.toLocaleString(), name === "x" ? xLabel : name === "y" ? yLabel : name];
+              const f = name === "x" ? xFormat : name === "y" ? yFormat : "number";
+              return [format(v, f), name === "x" ? xLabel : name === "y" ? yLabel : name];
             }}
             labelFormatter={() => ""}
           />

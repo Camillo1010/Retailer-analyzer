@@ -136,8 +136,8 @@ export default async function CategoryPage({
                 data={scatterData}
                 xLabel="sales PSF"
                 yLabel="occupancy %"
-                xFormat={(n) => `$${n.toFixed(0)}`}
-                yFormat={(n) => `${n.toFixed(1)}%`}
+                xFormat="currency"
+                yFormat="percent"
               />
             ) : (
               <div className="text-sm text-muted-foreground py-4">Not enough properties with both metrics to plot.</div>

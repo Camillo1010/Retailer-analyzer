@@ -1,7 +1,16 @@
 "use client";
 import { quartiles } from "@/lib/analytics/stats";
 import { chartTheme } from "./chart-theme";
-import { formatCurrency } from "@/lib/utils";
+
+export type BoxPlotFormat = "currency" | "percent" | "number";
+
+function fmt(v: number, mode: BoxPlotFormat): string {
+  switch (mode) {
+    case "currency": return `$${Math.round(v).toLocaleString()}`;
+    case "percent": return `${v.toFixed(1)}%`;
+    default: return v.toLocaleString();
+  }
+}
 
 /**
  * Minimal SVG box-plot. We build the visualization manually because Recharts
@@ -11,15 +20,16 @@ export function BoxPlot({
   values,
   subjectValue,
   height = 160,
-  format = (n) => formatCurrency(n, 0),
+  format: formatMode = "currency",
   label = "sales psf",
 }: {
   values: number[];
   subjectValue?: number | null;
   height?: number;
-  format?: (n: number) => string;
+  format?: BoxPlotFormat;
   label?: string;
 }) {
+  const format = (v: number) => fmt(v, formatMode);
   if (values.length < 4) {
     return <div className="text-xs text-muted-foreground py-4">Too few peer data points for a box plot.</div>;
   }
