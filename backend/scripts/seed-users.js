@@ -1,38 +1,25 @@
 /**
- * One-shot seed: writes the two family users to Realtime Database
- * with bcrypt-hashed passwords. Idempotent on username.
+ * Seed users into whichever store is configured.
  *
  *   cp .env.example .env  (fill in SEED_USER_*)
  *   npm run seed
+ *
+ * In demo (memory) mode, this script just shows the hardcoded demo
+ * users — `npm run dev` already seeds them on startup. The script is
+ * primarily useful in Firebase mode.
  */
 require('dotenv').config();
-const bcrypt = require('bcryptjs');
-const { db, initFirebase } = require('../firebase');
-
-async function upsertUser({ username, password, displayName }) {
-  if (!username || !password) {
-    throw new Error('username and password are required');
-  }
-  const ref = db().ref('users');
-  const existing = await ref.orderByChild('username').equalTo(username).once('value');
-  const passwordHash = await bcrypt.hash(password, 12);
-
-  if (existing.exists()) {
-    const [id] = Object.keys(existing.val());
-    await ref.child(id).update({ passwordHash, displayName: displayName || username });
-    return { id, action: 'updated' };
-  }
-  const created = await ref.push({
-    username,
-    displayName: displayName || username,
-    passwordHash,
-    createdAt: Date.now(),
-  });
-  return { id: created.key, action: 'created' };
-}
+const { store, isDemoMode } = require('../store');
 
 (async () => {
-  initFirebase();
+  if (isDemoMode) {
+    // eslint-disable-next-line no-console
+    console.log('[seed] demo mode — users are auto-created on `npm run dev`.');
+    console.log('[seed]   alex / demo');
+    console.log('[seed]   sam  / demo');
+    process.exit(0);
+  }
+
   const users = [
     {
       username: process.env.SEED_USER_1_USERNAME,
@@ -47,7 +34,7 @@ async function upsertUser({ username, password, displayName }) {
   ].filter((u) => u.username && u.password);
 
   for (const u of users) {
-    const r = await upsertUser(u);
+    const r = await store.upsertUser(u);
     // eslint-disable-next-line no-console
     console.log(`[seed] ${r.action} user ${u.username} (id=${r.id})`);
   }
